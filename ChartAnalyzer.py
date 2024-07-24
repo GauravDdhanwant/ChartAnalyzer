@@ -4,14 +4,11 @@ import easyocr
 import openai
 import cv2
 import torch
-import urllib.request
-import os
 from PIL import Image
-from matplotlib import pyplot as plt
 import requests
 from pathlib import Path
+from matplotlib import pyplot as plt
 from yolov5.utils.general import non_max_suppression
-from yolov5.utils.datasets import letterbox
 from yolov5.utils.torch_utils import select_device
 
 st.set_page_config(layout="wide")
@@ -53,11 +50,23 @@ device = select_device('')
 model = torch.load(model_path, map_location=device)['model']
 model.to(device).eval()
 
+def resize_and_scale_coords(image, target_shape=(640, 640)):
+    original_shape = image.shape[:2]  # original height, width
+    target_height, target_width = target_shape
+
+    # Resize image
+    resized_image = cv2.resize(image, (target_width, target_height))
+
+    # Calculate scaling factors
+    scale_x = target_width / original_shape[1]
+    scale_y = target_height / original_shape[0]
+
+    return resized_image, scale_x, scale_y, original_shape
+
 def detect_visuals(image):
-    original_shape = image.shape[:2]  # height, width
-    img = letterbox(image, new_shape=640, auto=False)[0]
-    img_shape = img.shape[:2]  # height, width
-    img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+    resized_image, scale_x, scale_y, original_shape = resize_and_scale_coords(image)
+
+    img = resized_image[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
     img = np.ascontiguousarray(img)
     
     img = torch.from_numpy(img).to(device)
@@ -73,17 +82,13 @@ def detect_visuals(image):
     visuals = []
     for det in pred:
         if len(det):
-            # Manually scale coordinates back to the original image size
-            gain = min(img_shape[0] / original_shape[0], img_shape[1] / original_shape[1])
-            pad = (img_shape[1] - original_shape[1] * gain) / 2, (img_shape[0] - original_shape[0] * gain) / 2  # width, height pad
-            det[:, [0, 2]] -= pad[0]  # x padding
-            det[:, [1, 3]] -= pad[1]  # y padding
-            det[:, :4] /= gain
-
-            det[:, :4] = det[:, :4].round()
-
             for *xyxy, conf, cls in reversed(det):
-                x1, y1, x2, y2 = map(int, xyxy)
+                x1, y1, x2, y2 = xyxy
+                x1 /= scale_x
+                y1 /= scale_y
+                x2 /= scale_x
+                y2 /= scale_y
+                x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
                 class_name = model.names[int(cls)]
                 if conf > 0.5:  # Confidence threshold
                     visuals.append((image[y1:y2, x1:x2], class_name))
