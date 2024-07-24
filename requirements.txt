@@ -1,5 +1,6 @@
 streamlit
 easyocr
+cv2
 openai
 opencv-python-headless
 torch
