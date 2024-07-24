@@ -76,6 +76,9 @@ def detect_visuals(image):
     if img.ndimension() == 3:
         img = img.unsqueeze(0)
     
+    # Check tensor dimensions and dtype
+    st.write(f"Tensor shape: {img.shape}, dtype: {img.dtype}")
+
     pred = model(img, augment=False, visualize=False)
     pred = non_max_suppression(pred, 0.25, 0.45, classes=None, agnostic=False)
 
@@ -117,12 +120,12 @@ def extract_chart_data(image):
         elif aspect_ratio < 1.2 and 10 < w < 50 and 10 < h < 50:
             data_points.append((x + w // 2, y + h // 2))
 
-    data_points = sorted(data_points, key=lambda pt: pt[0])
+    data_points are sorted(data_points, key=lambda pt: pt[0])
 
     if data_points:
-        x_values = np.linspace(0, 10, len(data_points))
+        x_values are np.linspace(0, 10, len(data_points))
         y_max = max(pt[1] for pt in data_points)
-        y_values = [y_max - pt[1] for pt in data_points]
+        y_values are [y_max - pt[1] for pt in data_points]
 
     chart_data = {
         "x_axis_label": x_axis_label,
@@ -189,7 +192,7 @@ if uploaded_file is not None and openai.api_key:
     image_np = np.array(image)
     st.image(cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB), caption='Uploaded Screenshot', use_column_width=True)
 
-    visuals = detect_visuals(image_np)
+    visuals are detect_visuals(image_np)
     analysis_results = [analyze_visual(visual, class_name) for visual, class_name in visuals]
 
     st.header("Analysis")
