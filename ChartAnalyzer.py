@@ -8,8 +8,9 @@ import urllib.request
 import os
 from PIL import Image
 from matplotlib import pyplot as plt
-from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.general import non_max_suppression, scale_coords
+import requests
+from pathlib import Path
+from yolov5.utils.general import non_max_suppression, scale_coords, check_img_size
 from yolov5.utils.datasets import letterbox
 from yolov5.utils.torch_utils import select_device
 
@@ -27,20 +28,30 @@ st.sidebar.title("Dashboard Analyzer")
 
 uploaded_file = st.sidebar.file_uploader("Upload a Screenshot", type=["png", "jpg", "jpeg"])
 
-# Initialize EasyOCR reader with a progress bar
+# Initialize EasyOCR reader
 with st.spinner("Downloading OCR model... This may take a few minutes."):
     reader = easyocr.Reader(['en'])
 
-# Download YOLOv5 model weights if not already present
-model_path = 'yolov5s.pt'
-if not os.path.exists(model_path):
-    with st.spinner("Downloading YOLOv5 model weights..."):
-        url = 'https://github.com/ultralytics/yolov5/releases/download/v5.0/yolov5s.pt'
-        urllib.request.urlretrieve(url, model_path)
+# Define a function to download YOLOv5 model
+def download_yolov5_model():
+    model_url = "https://github.com/ultralytics/yolov5/releases/download/v5.0/yolov5s.pt"
+    model_path = Path('yolov5s.pt')
+    if not model_path.exists():
+        with st.spinner("Downloading YOLOv5 model weights..."):
+            response = requests.get(model_url, stream=True)
+            with open(model_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+    return model_path
+
+# Download YOLOv5 model if not already present
+model_path = download_yolov5_model()
 
 # Load YOLOv5 model
 device = select_device('')
-model = DetectMultiBackend(model_path, device=device)
+model = torch.load(model_path, map_location=device)['model']
+model.to(device).eval()
 
 def detect_visuals(image):
     img = letterbox(image, new_shape=640)[0]
@@ -69,43 +80,32 @@ def detect_visuals(image):
     return visuals
 
 def extract_chart_data(image):
-    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Use adaptive thresholding to binarize the image
     binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-
-    # Find contours
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Initialize data containers
     x_axis_label = ""
     y_axis_label = ""
     data_points = []
 
-    # Loop over contours to identify axis and data points
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
         aspect_ratio = w / float(h)
         
-        # Identify potential axis labels (assuming text regions are wider than tall)
         if aspect_ratio > 2 and h < 50:
             roi = image[y:y+h, x:x+w]
             text = reader.readtext(roi, detail=0)
-            if y > image.shape[0] / 2:  # Assuming x-axis labels are in the bottom half of the image
+            if y > image.shape[0] / 2:
                 x_axis_label = ' '.join(text)
             else:
                 y_axis_label = ' '.join(text)
-        # Identify data points (assuming circular data points)
         elif aspect_ratio < 1.2 and 10 < w < 50 and 10 < h < 50:
-            data_points.append((x + w // 2, y + h // 2))  # Use center of the rectangle as data point
+            data_points.append((x + w // 2, y + h // 2))
 
-    # Sort data points based on x-axis for plotting
     data_points = sorted(data_points, key=lambda pt: pt[0])
 
-    # Extract values (assuming linear scales and uniform distribution for simplicity)
     if data_points:
-        x_values = np.linspace(0, 10, len(data_points))  # Replace with actual x-axis scale if known
+        x_values = np.linspace(0, 10, len(data_points))
         y_max = max(pt[1] for pt in data_points)
         y_values = [y_max - pt[1] for pt in data_points]
 
@@ -119,10 +119,7 @@ def extract_chart_data(image):
 
 def analyze_visual(visual, class_name):
     if class_name in ['chart', 'table']:
-        # Extract chart data
         chart_data = extract_chart_data(visual)
-        
-        # Generate insights and recommendations
         insights = generate_insights_from_gpt(chart_data)
         recommendations = generate_recommendations_from_gpt(insights)
         return insights, recommendations
@@ -172,7 +169,6 @@ def generate_recommendations_from_gpt(insights):
         return None
 
 if uploaded_file is not None and openai.api_key:
-    # Read the uploaded file using OpenCV
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     image_np = np.array(image)
