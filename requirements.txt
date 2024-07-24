@@ -1,4 +1,5 @@
 streamlit
+numpy
 easyocr
 openai
 opencv-python-headless
@@ -8,4 +9,4 @@ pandas
 matplotlib
 PyYAML>=5.3.1
 requests
-yolov5
+yolov5==7.0.13
