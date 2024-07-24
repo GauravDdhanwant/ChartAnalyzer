@@ -1,0 +1,10 @@
+streamlit
+numpy
+easyocr
+openai
+opencv-python-headless
+torch
+torchvision
+pandas
+matplotlib
+PyYAML>=5.3.1
