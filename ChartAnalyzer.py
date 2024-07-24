@@ -10,7 +10,7 @@ from PIL import Image
 from matplotlib import pyplot as plt
 import requests
 from pathlib import Path
-from yolov5.utils.general import non_max_suppression, scale_coords, check_img_size
+from yolov5.utils.general import non_max_suppression
 from yolov5.utils.datasets import letterbox
 from yolov5.utils.torch_utils import select_device
 
@@ -54,7 +54,9 @@ model = torch.load(model_path, map_location=device)['model']
 model.to(device).eval()
 
 def detect_visuals(image):
-    img = letterbox(image, new_shape=640)[0]
+    original_shape = image.shape[:2]  # height, width
+    img = letterbox(image, new_shape=640, auto=False)[0]
+    img_shape = img.shape[:2]  # height, width
     img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
     img = np.ascontiguousarray(img)
     
@@ -71,7 +73,15 @@ def detect_visuals(image):
     visuals = []
     for det in pred:
         if len(det):
-            det[:, :4] = scale_coords(img.shape[2:], det[:, :4], image.shape).round()
+            # Manually scale coordinates back to the original image size
+            gain = min(img_shape[0] / original_shape[0], img_shape[1] / original_shape[1])
+            pad = (img_shape[1] - original_shape[1] * gain) / 2, (img_shape[0] - original_shape[0] * gain) / 2  # width, height pad
+            det[:, [0, 2]] -= pad[0]  # x padding
+            det[:, [1, 3]] -= pad[1]  # y padding
+            det[:, :4] /= gain
+
+            det[:, :4] = det[:, :4].round()
+
             for *xyxy, conf, cls in reversed(det):
                 x1, y1, x2, y2 = map(int, xyxy)
                 class_name = model.names[int(cls)]
