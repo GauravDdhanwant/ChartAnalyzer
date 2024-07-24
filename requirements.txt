@@ -9,4 +9,3 @@ matplotlib
 PyYAML>=5.3.1
 requests
 yolov5
-scale_coords
